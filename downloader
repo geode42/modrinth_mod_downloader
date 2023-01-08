@@ -1,0 +1,171 @@
+import re
+import requests
+from os import path
+from threading import Thread
+import json
+import pyperclip
+
+# mod_list = 'https://modrinth.com/mods?q=visual&m=100\nhttps://modrinth.com/mod/cit-resewn\nhttps://modrinth.com/mod/not-enough-animations\nhttps://modrinth.com/mod/bobby\nhttps://modrinth.com/mod/presence-footsteps\nhttps://modrinth.com/mod/visual-workbench\nhttps://modrinth.com/mod/diagonal-fences\nhttps://modrinth.com/mod/easy-anvils\nhttps://modrinth.com/mod/easy-magic\nhttps://modrinth.com/mod/forge-config-api-port\nhttps://modrinth.com/mod/libipn\nhttps://modrinth.com/mod/replaymod\nhttps://modrinth.com/mod/show-me-your-skin\nhttps://modrinth.com/mod/dynamiccrosshair\nhttps://modrinth.com/mod/friends-and-foes\nhttps://modrinth.com/mod/skip-transitions\nhttps://modrinth.com/mod/clear-skies\nhttps://modrinth.com/mod/true-darkness\nhttps://modrinth.com/mod/styled-chat\nhttps://modrinth.com/mod/auditory\nhttps://modrinth.com/mod/simply-no-shading\nhttps://modrinth.com/mod/onebar\nhttps://modrinth.com/mod/visual-overhaul\nhttps://modrinth.com/mod/dripsounds-fabric\nhttps://modrinth.com/mod/invmove\nhttps://modrinth.com/mod/amecs\nhttps://modrinth.com/mod/main-menu-credits\nhttps://modrinth.com/mod/optigui\nhttps://modrinth.com/mod/emotecraft\nhttps://modrinth.com/mod/inspecio\nhttps://modrinth.com/mod/alternate-current\nhttps://modrinth.com/mod/yacl\nhttps://modrinth.com/mod/extrasounds\nhttps://modrinth.com/mod/repurposed-structures-fabric\nhttps://modrinth.com/mod/eating-animation\nhttps://modrinth.com/mod/raised\nhttps://modrinth.com/mod/iris\nhttps://modrinth.com/mod/lazydfu\nhttps://modrinth.com/mod/modmenu\nhttps://modrinth.com/mod/cloth-config\nhttps://modrinth.com/mod/indium\nhttps://modrinth.com/mod/sodium-extra\nhttps://modrinth.com/mod/lambdynamiclights\nhttps://modrinth.com/mod/reeses-sodium-options\nhttps://modrinth.com/mod/dynamic-fps\nhttps://modrinth.com/mod/fabric-language-kotlin\nhttps://modrinth.com/mod/continuity\nhttps://modrinth.com/mod/lambdabettergrass\nhttps://modrinth.com/mod/inventory-profiles-next\nhttps://modrinth.com/mod/betterf3\nhttps://modrinth.com/mod/appleskin\nhttps://modrinth.com/mod/no-chat-reports\nhttps://modrinth.com/mod/zoomify\nhttps://modrinth.com/mod/entitytexturefeatures\nhttps://modrinth.com/mod/origins\nhttps://modrinth.com/mod/animatica\nhttps://modrinth.com/mod/borderless-mining\nhttps://modrinth.com/mod/durabilityviewer\nhttps://modrinth.com/mod/clickthrough\nhttps://modrinth.com/mod/grass-kiss\nhttps://modrinth.com/mod/grid\nhttps://superuser.com/questions/117754/is-there-a-way-to-copy-urls-from-all-open-tabs-in-a-google-chrome-or-other-brow'.split('\n')
+mod_list = pyperclip.paste().split('\n')
+output_directory = './downloads'
+loaders_to_filter_for = 'fabric',
+mc_versions_to_filter_for = '1.19.2', '1.19.1', '1.19',
+
+loaders_to_filter_for_2 = '[' + ', '.join([f'"{i}"' for i in loaders_to_filter_for]) + ']'
+
+class Version:
+	def __init__(self, version: str) -> None:
+		v = version.split('.')
+		if len(v) == 0:
+			v = 0, 0, 0
+		elif len(v) == 1:
+			v = v[0], 0, 0
+		elif len(v) == 2:
+			v = v[0], v[1], 0
+		elif len(v) > 3:
+			raise Exception('Too many versions')
+		self.major = v[0]
+		self.minor = v[1]
+		self.patch = v[2]
+	
+	def __eq__(self, __o: object) -> bool:
+		if self.major == __o.major and self.minor == __o.minor and self.patch == __o.patch:
+			return True
+		return False
+	
+	def __ne__(self, __o: object) -> bool:
+		return not self.__eq__(__o)
+	
+	def __lt__(self, __o: object) -> bool:
+		if self.major != __o.major:
+			return self.major < __o.major
+		if self.minor != __o.minor:
+			return self.minor < __o.minor
+		return self.patch < __o.patch
+	
+	def __gt__(self, __o: object) -> bool:
+		if self.major != __o.major:
+			return self.major > __o.major
+		if self.minor != __o.minor:
+			return self.minor > __o.minor
+		return self.patch > __o.patch
+	
+	def __le__(self, __o: object) -> bool:
+		if self.major != __o.major:
+			return self.major <= __o.major
+		if self.minor != __o.minor:
+			return self.minor <= __o.minor
+		return self.patch <= __o.patch
+	
+	def __ge__(self, __o: object) -> bool:
+		if self.major != __o.major:
+			return self.major >= __o.major
+		if self.minor != __o.minor:
+			return self.minor >= __o.minor
+		return self.patch >= __o.patch
+
+
+# a = Version('1.19')
+# b = Version('1.18.1')
+
+# print(a == b)
+# print(a != b)
+# print(a > b)
+# print(a < b)
+# print(a >= b)
+# print(a <= b)
+
+# import sys
+# sys.exit(0)
+
+# mod_list = [mod_list[20]]
+
+def download_mod_from_slug(output_directory, slug):
+	versions = None
+	for v in mc_versions_to_filter_for:
+		# mc_versions_to_filter_for_2 = '[' + ', '.join([f'"{i}"' for i in mc_versions_to_filter_for]) + ']'
+		mc_versions_to_filter_for_2 = f'["{v}"]'
+		r = requests.get(f'https://api.modrinth.com/v2/project/{slug}/version?loaders={loaders_to_filter_for_2}&game_versions={mc_versions_to_filter_for_2}')
+		# print(f'https://api.modrinth.com/v2/project/{slug}/version?loaders={loaders_to_filter_for_2}&game_versions={mc_versions_to_filter_for_2}')
+		results = json.loads(r.text)
+		if len(results) > 0:
+			versions = results
+			break
+	if not versions:
+		print(f'Could not find a file for {slug}')
+		return
+	# best_game_version = None
+	# best_mod_version = None
+	# best_version_files = None
+	# print(versions)
+	# for v in versions:
+	# 	# Get the latest game version supported
+	# 	best_local_game_version = None
+	# 	for gm in v['game_versions']:
+	# 		if gm not in version_preference: continue
+	# 		gm2 = version_preference.index(gm)
+	# 		if best_local_game_version is None or gm2 < best_local_game_version:
+	# 			best_local_game_version = gm2
+
+	# 	# Get the mod version
+	# 	try:
+	# 		mod_version = Version(re.search(r'\d{1,}\.\d{1,}\.\d{1,}', v['version_number']).group())
+	# 	except AttributeError:
+	# 		print(v['version_number'])
+	# 		raise IndexError
+
+	# 	# Skip if game version isn't in version_preference
+	# 	if not best_local_game_version:
+	# 		continue
+
+	# 	# If there's no valid game version yet (the line above proved that this is a valid game version)
+	# 	if best_game_version is None:
+	# 		best_game_version = best_local_game_version
+	# 		best_mod_version = mod_version
+	# 		best_version_files = v['files']
+
+	# 	# If the local version is more preferable
+	# 	if best_local_game_version < best_game_version:
+	# 		best_game_version = best_local_game_version
+	# 		best_mod_version = mod_version
+	# 		best_version_files = v['files']
+		
+	# 	if best_local_game_version == best_game_version:
+	# 		if mod_version > best_mod_version:
+	# 			best_game_version = best_local_game_version
+	# 			best_mod_version = mod_version
+	# 			best_version_files = v['files']
+	
+
+	# with open(path.join(output_directory, 'hi.json'), 'w') as f:
+	# 	f.write(r.text)
+
+	for version_file in versions[0]['files']:
+		if version_file['primary']:
+			r = requests.get(version_file['url'])
+			with open(path.join(output_directory, version_file['filename']), 'wb') as f:
+				f.write(r.content) 
+
+
+threads = []
+for mod in mod_list:
+	# If the url isn't a mod url, skip it
+	if not re.search('(http|https)://modrinth.com/mod/', mod): continue
+
+	# Get slug
+	slug = re.search('(?:http|https)://modrinth.com/mod/(.*)', mod).group(1)
+
+	# Create thread
+	t = Thread(target=download_mod_from_slug, args=(output_directory, slug))
+	# Append to list
+	threads.append(t)
+
+# Start threads
+for thread in threads:
+	thread.start()
+
+# Somehow this makes Python wait for the threads to finish
+for thread in threads:
+	thread.join()
+
+
